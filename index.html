@@ -3,517 +3,339 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Obiecte Precis + AI</title>
-
-    <!-- TensorFlow.js + COCO-SSD -->
+    <title>Scanner Obiecte Live</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: #000;
+            background: #111;
             color: #fff;
             font-family: system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-            width: 100vw;
             height: 100vh;
+            width: 100vw;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
         }
-        #status-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 12px 16px;
-            background: rgba(0, 0, 0, 0.75);
-            z-index: 10;
+        /* Bara de sus vizibila mereu */
+        #top-bar {
+            background: #1e1e1e;
+            padding: 10px;
             display: flex;
-            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
             align-items: center;
+            z-index: 30;
+            border-bottom: 1px solid #333;
+        }
+        #api-input {
+            flex: 1;
+            min-width: 150px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #555;
+            background: #000;
+            color: #00e676;
             font-size: 13px;
-            gap: 8px;
         }
-        .controls-top {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .badge {
+        #save-key-btn {
+            padding: 8px 14px;
             background: #00e676;
             color: #000;
-            padding: 4px 10px;
-            border-radius: 12px;
+            border: none;
+            border-radius: 6px;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
         }
-        #key-btn {
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        #container {
-            position: relative;
+        #status {
             width: 100%;
-            height: 100%;
+            font-size: 12px;
+            color: #ccc;
+            display: flex;
+            justify-content: space-between;
+        }
+        /* Zona camerei */
+        #camera-box {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            background: #000;
         }
         video, canvas {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             object-fit: cover;
         }
-        canvas {
-            z-index: 5;
-            pointer-events: none;
-        }
-        /* Cerc de țintire pe centrul ecranului */
-        #crosshair {
+        canvas { z-index: 5; pointer-events: none; }
+        #start-cam-btn {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 44px;
-            height: 44px;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            border: 2px dashed rgba(255, 255, 255, 0.65);
-            border-radius: 50%;
-            z-index: 6;
-            pointer-events: none;
-        }
-        #crosshair::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 6px;
-            height: 6px;
-            background: #00e676;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-        }
-        #start-btn {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 20;
-            padding: 16px 28px;
+            z-index: 25;
+            padding: 16px 26px;
             font-size: 16px;
             font-weight: bold;
             background: #00e676;
             color: #000;
             border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            display: none;
+            border-radius: 12px;
         }
-        #bottom-panel {
+        /* Panou jos */
+        #bottom-bar {
             position: absolute;
-            bottom: 24px;
-            left: 16px;
-            right: 16px;
-            z-index: 15;
+            bottom: 20px; left: 12px; right: 12px;
+            z-index: 25;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
-        #gemini-result {
+        #result-box {
             width: 100%;
-            max-width: 500px;
-            background: rgba(15, 15, 20, 0.94);
+            background: rgba(15, 15, 20, 0.95);
             border: 1.5px solid #00e676;
-            border-radius: 14px;
-            padding: 14px 16px;
-            font-size: 15px;
-            line-height: 1.5;
+            border-radius: 12px;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.4;
             display: none;
-            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.75);
             white-space: pre-line;
         }
-        #gemini-result-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-            font-size: 12px;
-            color: #00e676;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        #close-result {
-            background: none;
-            border: none;
-            color: #aaa;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0 6px;
-        }
-        #identify-btn {
+        #analyze-btn {
             width: 100%;
             max-width: 340px;
-            padding: 16px 24px;
+            padding: 15px;
             font-size: 16px;
             font-weight: bold;
             background: #2979ff;
             color: #fff;
             border: none;
             border-radius: 50px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(41, 121, 255, 0.5);
         }
-        #identify-btn:disabled {
-            background: #555;
-            box-shadow: none;
-        }
+        #analyze-btn:disabled { background: #555; }
     </style>
 </head>
 <body>
 
-    <div id="status-bar">
-        <span id="status-text">Se încarcă AI precis...</span>
-        <div class="controls-top">
-            <button id="key-btn" onclick="seteazaCheieAPI()">API Key</button>
-            <span id="fps-badge" class="badge">0 FPS</span>
+    <div id="top-bar">
+        <input type="text" id="api-input" placeholder="Lipește aici cheia API...">
+        <button id="save-key-btn" onclick="salveazaCheie()">Salvează</button>
+        <div id="status">
+            <span id="status-msg">Se încarcă AI...</span>
+            <span id="fps-msg">0 FPS</span>
         </div>
     </div>
 
-    <button id="start-btn" onclick="pornesteCamera()">Pornește Camera</button>
-
-    <div id="container">
+    <div id="camera-box">
+        <button id="start-cam-btn" onclick="pornesteCamera()">Pornește Camera</button>
         <video id="video" autoplay muted playsinline></video>
         <canvas id="canvas"></canvas>
-        <div id="crosshair"></div>
-    </div>
 
-    <div id="bottom-panel">
-        <div id="gemini-result">
-            <div id="gemini-result-header">
-                <span>Analiză Detaliată (AI)</span>
-                <button id="close-result" onclick="inchideRezultat()">✕</button>
-            </div>
-            <div id="gemini-text"></div>
+        <div id="bottom-bar">
+            <div id="result-box" onclick="this.style.display='none'"></div>
+            <button id="analyze-btn" onclick="analizeazaExact()">Analizează exact (Ce / Cine / Culoare)</button>
         </div>
-
-        <button id="identify-btn" onclick="identificaCuGemini()">Analizează exact (Ce / Cine / Culoare)</button>
     </div>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const fpsBadge = document.getElementById('fps-badge');
-        const startBtn = document.getElementById('start-btn');
-        const identifyBtn = document.getElementById('identify-btn');
-        const geminiResultBox = document.getElementById('gemini-result');
-        const geminiText = document.getElementById('gemini-text');
+        const statusMsg = document.getElementById('status-msg');
+        const fpsMsg = document.getElementById('fps-msg');
+        const apiInput = document.getElementById('api-input');
+        const startCamBtn = document.getElementById('start-cam-btn');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const resultBox = document.getElementById('result-box');
 
-        // Canvas invizibil mic pentru citirea culorilor în timp real
         const colorCanvas = document.createElement('canvas');
         const colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
 
         let model = null;
-        let lastFrameTime = performance.now();
+        let lastTime = performance.now();
 
-        // Dicționar extins (80 obiecte COCO-SSD în română)
+        // Încarcă cheia salvată anterior în căsuță
+        apiInput.value = localStorage.getItem('gemini_api_key') || '';
+
+        function salveazaCheie() {
+            const val = apiInput.value.trim();
+            if (!val) {
+                alert("Lipește cheia în căsuța din stânga mai întâi!");
+                return;
+            }
+            localStorage.setItem('gemini_api_key', val);
+            statusMsg.innerText = "Cheie API salvată!";
+            alert("Cheia a fost salvată!");
+        }
+
         const traduceri = {
-            "person": "Persoană", "bicycle": "Bicicletă", "car": "Mașină", "motorcycle": "Motocicletă",
-            "airplane": "Avion", "bus": "Autobuz", "train": "Tren", "truck": "Camion", "boat": "Barcă",
-            "traffic light": "Semafor", "fire hydrant": "Hidrant", "stop sign": "Semn Stop",
-            "parking meter": "Parcometru", "bench": "Bancă", "bird": "Pasăre", "cat": "Pisică",
-            "dog": "Câine", "horse": "Cal", "sheep": "Oaie", "cow": "Vacă", "elephant": "Elefant",
-            "bear": "Urs", "zebra": "Zebră", "giraffe": "Girafă", "backpack": "Rucsac",
-            "umbrella": "Umbrelă", "handbag": "Geantă", "tie": "Cravată", "suitcase": "Valiză",
-            "frisbee": "Frisbee", "skis": "Schiuri", "snowboard": "Snowboard", "sports ball": "Minge",
-            "kite": "Zmeu", "baseball bat": "Bâtă", "baseball glove": "Mănușă", "skateboard": "Skateboard",
-            "surfboard": "Placă surf", "tennis racket": "Rachetă tenis", "bottle": "Sticlă",
-            "wine glass": "Pahar vin", "cup": "Cană / Pahar", "fork": "Furculiță", "knife": "Cuțit",
-            "spoon": "Lingură", "bowl": "Bol / Castron", "banana": "Banană", "apple": "Măr",
-            "sandwich": "Sandviș", "orange": "Portocală", "broccoli": "Broccoli", "carrot": "Morcov",
-            "hot dog": "Hot dog", "pizza": "Pizza", "donut": "Gogoașă", "cake": "Prăjitură / Tort",
-            "chair": "Scaun", "couch": "Canapea", "potted plant": "Plantă în ghiveci", "bed": "Pat",
-            "dining table": "Masă", "toilet": "Toaletă", "tv": "Televizor / Monitor", "laptop": "Laptop",
-            "mouse": "Mouse", "remote": "Telecomandă", "keyboard": "Tastatură", "cell phone": "Telefon",
-            "microwave": "Cuptor microunde", "oven": "Cuptor", "toaster": "Prăjitor pâine",
-            "sink": "Chiuvetă", "refrigerator": "Frigider", "book": "Carte", "clock": "Ceas",
-            "vase": "Vază", "scissors": "Foarfecă", "teddy bear": "Ursuleț pluș",
-            "hair drier": "Uscător păr", "toothbrush": "Periuță dinți"
+            "person": "Persoană", "cell phone": "Telefon", "bottle": "Sticlă",
+            "cup": "Cană / Pahar", "laptop": "Laptop", "keyboard": "Tastatură",
+            "mouse": "Mouse", "chair": "Scaun", "book": "Carte", "car": "Mașină",
+            "dog": "Câine", "cat": "Pisică", "backpack": "Rucsac", "tv": "Monitor / TV",
+            "remote": "Telecomandă", "scissors": "Foarfecă", "bowl": "Bol", "spoon": "Lingură"
         };
 
-        // Detectează culoarea dominantă din centrul obiectului încercuit
-        function detecteazaCuloare(x, y, w, h) {
+        function getCuloare(x, y, w, h) {
             try {
-                // Luăm o zonă mică (20% din centru) ca să evităm fundalul
                 const cx = Math.floor(x + w * 0.4);
                 const cy = Math.floor(y + h * 0.4);
                 const cw = Math.max(4, Math.floor(w * 0.2));
                 const ch = Math.max(4, Math.floor(h * 0.2));
-
-                const imgData = colorCtx.getImageData(cx, cy, cw, ch).data;
-                let r = 0, g = 0, b = 0, count = 0;
-
-                for (let i = 0; i < imgData.length; i += 4) {
-                    r += imgData[i];
-                    g += imgData[i + 1];
-                    b += imgData[i + 2];
-                    count++;
-                }
-
-                r = Math.round(r / count);
-                g = Math.round(g / count);
-                b = Math.round(b / count);
-
-                return numeCuloareRGB(r, g, b);
-            } catch (e) {
-                return "";
-            }
+                const d = colorCtx.getImageData(cx, cy, cw, ch).data;
+                let r = 0, g = 0, b = 0, c = 0;
+                for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; c++; }
+                r = Math.round(r/c); g = Math.round(g/c); b = Math.round(b/c);
+                const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                if (max < 45) return "Negru";
+                if (min > 205) return "Alb";
+                if (max - min < 28) return "Gri";
+                if (r > g && r > b) return (g > 130) ? "Galben/Portocaliu" : "Roșu";
+                if (g > r && g > b) return "Verde";
+                return "Albastru";
+            } catch (e) { return ""; }
         }
 
-        // Transformă RGB în denumire clară de culoare
-        function numeCuloareRGB(r, g, b) {
-            const rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
-            const max = Math.max(rNorm, gNorm, bNorm);
-            const min = Math.min(rNorm, gNorm, bNorm);
-            const d = max - min;
-            const l = (max + min) / 2;
-            const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-
-            let h = 0;
-            if (d !== 0) {
-                if (max === rNorm) h = ((gNorm - bNorm) / d) % 6;
-                else if (max === gNorm) h = (bNorm - rNorm) / d + 2;
-                else h = (rNorm - gNorm) / d + 4;
-                h = Math.round(h * 60);
-                if (h < 0) h += 360;
-            }
-
-            if (l < 0.16) return "Negru";
-            if (l > 0.84 && s < 0.25) return "Alb";
-            if (s < 0.16) return l < 0.5 ? "Gri închis" : "Gri";
-
-            if (h < 15 || h >= 345) return l < 0.35 ? "Vișiniu" : "Roșu";
-            if (h < 42) return l < 0.4 ? "Maro" : "Portocaliu";
-            if (h < 68) return "Galben";
-            if (h < 165) return l < 0.35 ? "Verde închis" : "Verde";
-            if (h < 200) return "Turcoaz";
-            if (h < 255) return l < 0.35 ? "Bleumarin" : "Albastru";
-            if (h < 295) return "Mov";
-            return "Roz";
-        }
-
-        function getApiKey() {
-            return localStorage.getItem('gemini_api_key') || '';
-        }
-
-        function seteazaCheieAPI() {
-            const cheieCurenta = getApiKey();
-            const cheieNoua = prompt("Introdu cheia Google Gemini API (AIza...):", cheieCurenta);
-            if (cheieNoua !== null) {
-                localStorage.setItem('gemini_api_key', cheieNoua.trim());
-                alert("Cheia API a fost salvată!");
-            }
-        }
-
-        function inchideRezultat() {
-            geminiResultBox.style.display = 'none';
-        }
-
-        // Folosim modelul complet 'mobilenet_v2' pentru acuratețe mai mare
-        async function initAI() {
+        async function init() {
             try {
-                model = await cocoSsd.load({ base: 'mobilenet_v2' });
-                statusText.innerText = "AI de precizie gata";
-                startBtn.style.display = "block";
+                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+                statusMsg.innerText = "AI gata. Pornește camera!";
                 pornesteCamera();
-            } catch (err) {
-                statusText.innerText = "Eroare AI: " + err.message;
+            } catch (e) {
+                statusMsg.innerText = "Eroare AI: " + e.message;
             }
         }
 
         async function pornesteCamera() {
-            startBtn.style.display = "none";
-            statusText.innerText = "Se pornește camera...";
-
+            statusMsg.innerText = "Se cere acces cameră...";
             try {
-                let stream;
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: false,
-                        video: { facingMode: { exact: "environment" } }
-                    });
-                } catch (e) {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        audio: false,
-                        video: true
-                    });
-                }
-
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: { facingMode: "environment" }
+                });
                 video.srcObject = stream;
-                video.setAttribute("playsinline", true);
                 await video.play();
-
-                statusText.innerText = "Scanare activă";
-                detecteazaCadru();
+                startCamBtn.style.display = "none";
+                statusMsg.innerText = "Scanare activă";
+                buclaDetectie();
             } catch (err) {
-                statusText.innerText = "Eroare cameră: " + err.message;
-                startBtn.style.display = "block";
+                startCamBtn.style.display = "block";
+                statusMsg.innerText = "Apasă butonul verde (Eroare: " + err.name + ")";
             }
         }
 
-        async function detecteazaCadru() {
+        async function buclaDetectie() {
             if (!model || video.readyState !== 4) {
-                requestAnimationFrame(detecteazaCadru);
+                requestAnimationFrame(buclaDetectie);
                 return;
             }
-
             if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
                 canvas.width = video.clientWidth;
                 canvas.height = video.clientHeight;
             }
-
-            // Copiem cadrul curent pentru analiza culorilor
             if (colorCanvas.width !== video.videoWidth || colorCanvas.height !== video.videoHeight) {
                 colorCanvas.width = video.videoWidth;
                 colorCanvas.height = video.videoHeight;
             }
             colorCtx.drawImage(video, 0, 0, colorCanvas.width, colorCanvas.height);
 
-            // Prag de siguranță 0.60 (60%) pentru a elimina detecțiile false
-            const predictions = await model.detect(video, 8, 0.60);
-
+            const preds = await model.detect(video, 8, 0.55);
             const now = performance.now();
-            const fps = Math.round(1000 / (now - lastFrameTime));
-            lastFrameTime = now;
-            fpsBadge.innerText = `${fps} FPS`;
+            fpsMsg.innerText = Math.round(1000 / (now - lastTime)) + " FPS";
+            lastTime = now;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const videoRatio = video.videoWidth / video.videoHeight;
-            const screenRatio = canvas.width / canvas.height;
-            let scale, offsetX = 0, offsetY = 0;
-
-            if (screenRatio > videoRatio) {
+            const vRatio = video.videoWidth / video.videoHeight;
+            const sRatio = canvas.width / canvas.height;
+            let scale, offX = 0, offY = 0;
+            if (sRatio > vRatio) {
                 scale = canvas.width / video.videoWidth;
-                offsetY = (canvas.height - video.videoHeight * scale) / 2;
+                offY = (canvas.height - video.videoHeight * scale) / 2;
             } else {
                 scale = canvas.height / video.videoHeight;
-                offsetX = (canvas.width - video.videoWidth * scale) / 2;
+                offX = (canvas.width - video.videoWidth * scale) / 2;
             }
 
-            predictions.forEach(pred => {
-                const [rawX, rawY, rawW, rawH] = pred.bbox;
-                const x = rawX * scale + offsetX;
-                const y = rawY * scale + offsetY;
-                const w = rawW * scale;
-                const h = rawH * scale;
+            preds.forEach(p => {
+                const [rx, ry, rw, rh] = p.bbox;
+                const x = rx * scale + offX;
+                const y = ry * scale + offY;
+                const w = rw * scale;
+                const h = rh * scale;
 
-                const numeObiect = traduceri[pred.class] || pred.class.toUpperCase();
-                const culoare = detecteazaCuloare(rawX, rawY, rawW, rawH);
-                const procent = Math.round(pred.score * 100);
-                const eticheta = `${numeObiect} • ${culoare} (${procent}%)`;
+                const nume = traduceri[p.class] || p.class.toUpperCase();
+                const cul = getCuloare(rx, ry, rw, rh);
+                const text = `${nume} • ${cul} (${Math.round(p.score*100)}%)`;
 
-                // Încercuire (elipsă precisă în jurul obiectului)
                 ctx.strokeStyle = "#00e676";
-                ctx.lineWidth = 3.5;
+                ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, 2 * Math.PI);
+                ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
-                // Etichetă deasupra cercului
-                ctx.font = "bold 14px system-ui, sans-serif";
-                const textWidth = ctx.measureText(eticheta).width;
-                const labelX = Math.max(8, x + w / 2 - textWidth / 2 - 7);
-                const labelY = y > 30 ? y - 28 : y + 6;
-
-                ctx.fillStyle = "rgba(0, 230, 118, 0.92)";
-                ctx.beginPath();
-                ctx.roundRect(labelX, labelY, textWidth + 14, 24, 6);
-                ctx.fill();
-
-                ctx.fillStyle = "#000000";
-                ctx.fillText(eticheta, labelX + 7, labelY + 17);
+                ctx.font = "bold 14px sans-serif";
+                const tw = ctx.measureText(text).width;
+                const ly = y > 28 ? y - 26 : y + 6;
+                ctx.fillStyle = "rgba(0, 230, 118, 0.9)";
+                ctx.fillRect(x, ly, tw + 12, 22);
+                ctx.fillStyle = "#000";
+                ctx.fillText(text, x + 6, ly + 16);
             });
 
-            requestAnimationFrame(detecteazaCadru);
+            requestAnimationFrame(buclaDetectie);
         }
 
-        async function identificaCuGemini() {
-            let apiKey = getApiKey();
-            if (!apiKey) {
-                seteazaCheieAPI();
-                apiKey = getApiKey();
-                if (!apiKey) return;
+        async function analizeazaExact() {
+            const key = apiInput.value.trim() || localStorage.getItem('gemini_api_key');
+            if (!key) {
+                alert("Introdu cheia API în căsuța de sus și apasă Salvează!");
+                return;
             }
-
             if (video.readyState !== 4) {
-                alert("Camera nu este pornită încă.");
+                alert("Pornește camera mai întâi!");
                 return;
             }
 
-            identifyBtn.disabled = true;
-            identifyBtn.innerText = "Se analizează în detaliu...";
-            geminiResultBox.style.display = "block";
-            geminiText.innerText = "Se identifică obiectul, culoarea și detaliile...";
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerText = "Se analizează...";
+            resultBox.style.display = "block";
+            resultBox.innerText = "Se identifică obiectul, culoarea și detaliile...";
 
             try {
-                const captureCanvas = document.createElement('canvas');
-                captureCanvas.width = video.videoWidth;
-                captureCanvas.height = video.videoHeight;
-                const captureCtx = captureCanvas.getContext('2d');
-                captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+                const c = document.createElement('canvas');
+                c.width = video.videoWidth;
+                c.height = video.videoHeight;
+                c.getContext('2d').drawImage(video, 0, 0);
+                const b64 = c.toDataURL('image/jpeg', 0.8).split(',')[1];
 
-                // Calitate mare (0.9) pentru a citi text mic și nuanțe exacte
-                const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.9);
-                const base64Image = dataUrl.split(',')[1];
-
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-
-                const payload = {
-                    contents: [{
-                        parts: [
-                            {
-                                text: "Analizează cu maximă precizie ce se află în centrul imaginii. Răspunde în limba română, scurt, clar și structurat exact pe aceste 3 linii (fără introduceri sau asteriscuri):\n• Ce / Cine este: [denumirea exactă a obiectului, marca, modelul, sau dacă este o persoană/animal descrie cine este și ce face]\n• Culoare și material: [culorile exacte, nuanțele și materialul din care e făcut]\n• Detalii / Text: [orice text scris pe etichetă, gramaj, stare sau trăsături distinctive]"
-                            },
-                            {
-                                inline_data: {
-                                    mime_type: "image/jpeg",
-                                    data: base64Image
-                                }
-                            }
-                        ]
-                    }]
-                };
-
-                const response = await fetch(url, {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "Identifică exact ce se află în centrul imaginii. Răspunde scurt în română pe 3 rânduri (atinge caseta ca să o închizi):\n• Ce / Cine este: [obiect exact, marcă, model sau persoană]\n• Culoare: [culorile exacte]\n• Detalii / Text: [text vizibil, stare]" },
+                                { inline_data: { mime_type: "image/jpeg", data: b64 } }
+                            ]
+                        }]
+                    })
                 });
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.error?.message || "Eroare API");
-                }
-
-                const raspunsAI = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nu am putut identifica.";
-                geminiText.innerText = raspunsAI;
-
-            } catch (err) {
-                geminiText.innerText = "Eroare: " + err.message;
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error?.message || "Eroare API");
+                resultBox.innerText = (data.candidates?.[0]?.content?.parts?.[0]?.text || "Niciun rezultat") + "\n\n(Apasă pe această casetă pentru a o închide)";
+            } catch (e) {
+                resultBox.innerText = "Eroare: " + e.message;
             } finally {
-                identifyBtn.disabled = 
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerText = "Analizează exact (Ce / Cine / Culoare)";
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
