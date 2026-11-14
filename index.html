@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Obiecte Live v3</title>
+    <title>Scanner Total Live v4</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
     <style>
@@ -19,40 +19,52 @@
             flex-direction: column;
         }
         #top-bar {
-            background: #1a1a1a;
+            background: rgba(20, 20, 20, 0.92);
             padding: 10px 12px;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 8px;
-            align-items: center;
             z-index: 50;
             border-bottom: 1px solid #333;
         }
+        #key-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
         #api-input {
             flex: 1;
-            min-width: 140px;
-            padding: 10px;
+            min-width: 120px;
+            padding: 8px 10px;
             border-radius: 8px;
             border: 1px solid #00e676;
             background: #000;
             color: #00e676;
-            font-size: 14px;
+            font-size: 13px;
         }
         #save-btn {
-            padding: 10px 16px;
+            padding: 8px 14px;
             background: #00e676;
             color: #000;
             border: none;
             border-radius: 8px;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
         }
         #status-row {
-            width: 100%;
             display: flex;
             justify-content: space-between;
+            align-items: center;
             font-size: 12px;
-            color: #bbb;
+            color: #ccc;
+        }
+        #toggle-key-btn {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
         }
         #camera-area {
             position: relative;
@@ -67,25 +79,6 @@
             object-fit: cover;
         }
         canvas { z-index: 5; pointer-events: none; }
-        #crosshair {
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 44px; height: 44px;
-            transform: translate(-50%, -50%);
-            border: 2px dashed rgba(255, 255, 255, 0.7);
-            border-radius: 50%;
-            z-index: 6;
-            pointer-events: none;
-        }
-        #crosshair::after {
-            content: '';
-            position: absolute;
-            top: 50%; left: 50%;
-            width: 6px; height: 6px;
-            background: #00e676;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-        }
         #manual-cam-btn {
             position: absolute;
             top: 50%; left: 50%;
@@ -102,7 +95,7 @@
         }
         #bottom-bar {
             position: absolute;
-            bottom: 24px; left: 14px; right: 14px;
+            bottom: 20px; left: 12px; right: 12px;
             z-index: 40;
             display: flex;
             flex-direction: column;
@@ -111,18 +104,40 @@
         }
         #result-box {
             width: 100%;
-            background: rgba(15, 15, 20, 0.95);
+            max-height: 45vh;
+            overflow-y: auto;
+            background: rgba(12, 14, 18, 0.95);
             border: 1.5px solid #00e676;
             border-radius: 12px;
             padding: 14px;
             font-size: 14px;
-            line-height: 1.45;
+            line-height: 1.5;
             display: none;
             white-space: pre-line;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.8);
+        }
+        #result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #00e676;
+            font-weight: bold;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #333;
+        }
+        #close-res {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 18px;
+            padding: 0 6px;
         }
         #analyze-btn {
             width: 100%;
-            max-width: 350px;
+            max-width: 360px;
             padding: 16px;
             font-size: 16px;
             font-weight: bold;
@@ -138,11 +153,16 @@
 <body>
 
     <div id="top-bar">
-        <input type="text" id="api-input" placeholder="Lipește aici cheia API...">
-        <button id="save-btn" onclick="salveazaCheie()">Salvează</button>
+        <div id="key-row">
+            <input type="text" id="api-input" placeholder="Lipește cheia API aici...">
+            <button id="save-btn" onclick="salveazaCheie()">Salvează</button>
+        </div>
         <div id="status-row">
             <span id="status-msg">Se pornește camera...</span>
-            <span id="fps-msg">0 FPS</span>
+            <div>
+                <button id="toggle-key-btn" onclick="toggleKeyBar()">Ascunde Key</button>
+                <span id="fps-msg" style="margin-left: 6px; color: #00e676; font-weight: bold;">0 FPS</span>
+            </div>
         </div>
     </div>
 
@@ -150,11 +170,16 @@
         <button id="manual-cam-btn" onclick="pornesteCamera()">Pornește Camera</button>
         <video id="video" autoplay muted playsinline></video>
         <canvas id="canvas"></canvas>
-        <div id="crosshair"></div>
 
         <div id="bottom-bar">
-            <div id="result-box" onclick="this.style.display='none'"></div>
-            <button id="analyze-btn" onclick="analizeazaExact()">Analizează exact (Ce / Cine / Culoare)</button>
+            <div id="result-box">
+                <div id="result-header">
+                    <span>Tot ce vede camera (AI)</span>
+                    <button id="close-res" onclick="document.getElementById('result-box').style.display='none'">✕</button>
+                </div>
+                <div id="result-content"></div>
+            </div>
+            <button id="analyze-btn" onclick="analizeazaTot()">Scanează TOT ce vede (AI)</button>
         </div>
     </div>
 
@@ -165,9 +190,12 @@
         const statusMsg = document.getElementById('status-msg');
         const fpsMsg = document.getElementById('fps-msg');
         const apiInput = document.getElementById('api-input');
+        const keyRow = document.getElementById('key-row');
+        const toggleKeyBtn = document.getElementById('toggle-key-btn');
         const manualCamBtn = document.getElementById('manual-cam-btn');
         const analyzeBtn = document.getElementById('analyze-btn');
         const resultBox = document.getElementById('result-box');
+        const resultContent = document.getElementById('result-content');
 
         const colorCanvas = document.createElement('canvas');
         const colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
@@ -175,7 +203,22 @@
         let model = null;
         let lastTime = performance.now();
 
-        apiInput.value = localStorage.getItem('gemini_api_key') || '';
+        const savedKey = localStorage.getItem('gemini_api_key') || '';
+        apiInput.value = savedKey;
+        if (savedKey) {
+            keyRow.style.display = 'none';
+            toggleKeyBtn.innerText = 'Arată Key';
+        }
+
+        function toggleKeyBar() {
+            if (keyRow.style.display === 'none') {
+                keyRow.style.display = 'flex';
+                toggleKeyBtn.innerText = 'Ascunde Key';
+            } else {
+                keyRow.style.display = 'none';
+                toggleKeyBtn.innerText = 'Arată Key';
+            }
+        }
 
         function salveazaCheie() {
             const val = apiInput.value.trim();
@@ -185,22 +228,27 @@
             }
             localStorage.setItem('gemini_api_key', val);
             statusMsg.innerText = "Cheie API salvată!";
-            alert("Cheia a fost salvată!");
+            keyRow.style.display = 'none';
+            toggleKeyBtn.innerText = 'Arată Key';
         }
 
         const traduceri = {
             "person": "Persoană", "bicycle": "Bicicletă", "car": "Mașină", "motorcycle": "Motocicletă",
-            "bus": "Autobuz", "truck": "Camion", "bird": "Pasăre", "cat": "Pisică", "dog": "Câine",
-            "backpack": "Rucsac", "umbrella": "Umbrelă", "handbag": "Geantă", "suitcase": "Valiză",
-            "sports ball": "Minge", "bottle": "Sticlă", "wine glass": "Pahar", "cup": "Cană / Pahar",
-            "fork": "Furculiță", "knife": "Cuțit", "spoon": "Lingură", "bowl": "Bol",
-            "banana": "Banană", "apple": "Măr", "sandwich": "Sandviș", "orange": "Portocală",
-            "pizza": "Pizza", "donut": "Gogoașă", "cake": "Prăjitură", "chair": "Scaun",
-            "couch": "Canapea", "potted plant": "Plantă", "bed": "Pat", "dining table": "Masă",
+            "airplane": "Avion", "bus": "Autobuz", "train": "Tren", "truck": "Camion", "boat": "Barcă",
+            "traffic light": "Semafor", "fire hydrant": "Hidrant", "stop sign": "Semn Stop",
+            "bench": "Bancă", "bird": "Pasăre", "cat": "Pisică", "dog": "Câine", "horse": "Cal",
+            "backpack": "Rucsac", "umbrella": "Umbrelă", "handbag": "Geantă", "tie": "Cravată",
+            "suitcase": "Valiză", "sports ball": "Minge", "bottle": "Sticlă", "wine glass": "Pahar vin",
+            "cup": "Cană / Pahar", "fork": "Furculiță", "knife": "Cuțit", "spoon": "Lingură",
+            "bowl": "Bol / Castron", "banana": "Banană", "apple": "Măr", "sandwich": "Sandviș",
+            "orange": "Portocală", "broccoli": "Broccoli", "carrot": "Morcov", "pizza": "Pizza",
+            "donut": "Gogoașă", "cake": "Prăjitură", "chair": "Scaun", "couch": "Canapea",
+            "potted plant": "Plantă", "bed": "Pat", "dining table": "Masă", "toilet": "Toaletă",
             "tv": "TV / Monitor", "laptop": "Laptop", "mouse": "Mouse", "remote": "Telecomandă",
             "keyboard": "Tastatură", "cell phone": "Telefon", "microwave": "Cuptor microunde",
-            "refrigerator": "Frigider", "book": "Carte", "clock": "Ceas", "vase": "Vază",
-            "scissors": "Foarfecă", "toothbrush": "Periuță dinți"
+            "oven": "Cuptor", "toaster": "Prăjitor", "sink": "Chiuvetă", "refrigerator": "Frigider",
+            "book": "Carte", "clock": "Ceas", "vase": "Vază", "scissors": "Foarfecă",
+            "teddy bear": "Ursuleț", "hair drier": "Uscător păr", "toothbrush": "Periuță dinți"
         };
 
         function getCuloare(x, y, w, h) {
@@ -223,7 +271,6 @@
             } catch (e) { return ""; }
         }
 
-        // 1. Pornim camera IMEDIAT, fără să așteptăm modelul AI
         async function pornesteCamera() {
             manualCamBtn.style.display = "none";
             try {
@@ -233,21 +280,20 @@
                 });
                 video.srcObject = stream;
                 await video.play();
-                statusMsg.innerText = model ? "Scanare activă" : "Cameră activă (se încarcă AI...)";
+                statusMsg.innerText = model ? "Scanare live activă" : "Cameră activă (se încarcă AI...)";
                 buclaDetectie();
             } catch (err) {
                 manualCamBtn.style.display = "block";
-                statusMsg.innerText = "Apasă butonul verde (Eroare: " + err.name + ")";
+                statusMsg.innerText = "Apasă butonul verde (" + err.name + ")";
             }
         }
 
-        // 2. Încărcăm modelul rapid în paralel
         async function incarcaAI() {
             try {
-                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-                statusMsg.innerText = "Scanare activă";
+                model = await cocoSsd.load({ base: 'mobilenet_v2' });
+                statusMsg.innerText = "Scanare live activă (Precizie mare)";
             } catch (e) {
-                statusMsg.innerText = "Cameră activă (AI offline indisponibil)";
+                statusMsg.innerText = "Cameră activă";
             }
         }
 
@@ -265,7 +311,8 @@
                     }
                     colorCtx.drawImage(video, 0, 0, colorCanvas.width, colorCanvas.height);
 
-                    const preds = await model.detect(video, 8, 0.55);
+                    // Detectează până la 15 obiecte simultan, prag 0.45
+                    const preds = await model.detect(video, 15, 0.45);
                     const now = performance.now();
                     fpsMsg.innerText = Math.round(1000 / (now - lastTime)) + " FPS";
                     lastTime = now;
@@ -295,28 +342,29 @@
                         const text = `${nume} • ${cul} (${Math.round(p.score*100)}%)`;
 
                         ctx.strokeStyle = "#00e676";
-                        ctx.lineWidth = 3.5;
+                        ctx.lineWidth = 3;
                         ctx.beginPath();
                         ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
                         ctx.stroke();
 
-                        ctx.font = "bold 14px sans-serif";
+                        ctx.font = "bold 13px sans-serif";
                         const tw = ctx.measureText(text).width;
-                        const ly = y > 28 ? y - 26 : y + 6;
+                        const ly = y > 26 ? y - 24 : y + 6;
                         ctx.fillStyle = "rgba(0, 230, 118, 0.92)";
-                        ctx.fillRect(x, ly, tw + 12, 22);
+                        ctx.fillRect(x, ly, tw + 10, 20);
                         ctx.fillStyle = "#000";
-                        ctx.fillText(text, x + 6, ly + 16);
+                        ctx.fillText(text, x + 5, ly + 15);
                     });
                 }
             }
             requestAnimationFrame(buclaDetectie);
         }
 
-        async function analizeazaExact() {
+        async function analizeazaTot() {
             const key = apiInput.value.trim() || localStorage.getItem('gemini_api_key');
             if (!key) {
-                alert("Lipește cheia API în căsuța neagră de sus și apasă Salvează!");
+                keyRow.style.display = 'flex';
+                alert("Lipește cheia API în căsuța de sus și apasă Salvează!");
                 return;
             }
             if (video.readyState !== 4) {
@@ -325,16 +373,16 @@
             }
 
             analyzeBtn.disabled = true;
-            analyzeBtn.innerText = "Se analizează...";
+            analyzeBtn.innerText = "Se scanează tot cadrul...";
             resultBox.style.display = "block";
-            resultBox.innerText = "Se identifică obiectul, culoarea și detaliile...";
+            resultContent.innerText = "Se identifică toate obiectele, persoanele și textele din imagine...";
 
             try {
                 const c = document.createElement('canvas');
                 c.width = video.videoWidth;
                 c.height = video.videoHeight;
                 c.getContext('2d').drawImage(video, 0, 0);
-                const b64 = c.toDataURL('image/jpeg', 0.85).split(',')[1];
+                const b64 = c.toDataURL('image/jpeg', 0.9).split(',')[1];
 
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
                     method: 'POST',
@@ -342,7 +390,7 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Identifică exact ce se află în centrul imaginii. Răspunde scurt și precis în română pe 3 rânduri:\n• Ce / Cine este: [obiect exact, marcă, model sau persoană]\n• Culoare: [culorile exacte]\n• Detalii / Text: [text vizibil, stare]" },
+                                { text: "Listează ABSOLUT TOT ce vezi în această imagine, fără să omiți nimic (fiecare obiect, produs, persoană, mobilier, text de pe etichete sau fundal). Răspunde în română, sub formă de listă clară cu liniuță (-), menționând pentru fiecare: ce/cine este exact (marcă/model dacă se vede), ce culoare are și unde este poziționat (ex: centru, stânga, dreapta, fundal)." },
                                 { inline_data: { mime_type: "image/jpeg", data: b64 } }
                             ]
                         }]
@@ -351,12 +399,12 @@
 
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error?.message || "Eroare API");
-                resultBox.innerText = (data.candidates?.[0]?.content?.parts?.[0]?.text || "Niciun rezultat") + "\n\n(Apasă pe casetă ca să o închizi)";
+                resultContent.innerText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nu am detectat nimic.";
             } catch (e) {
-                resultBox.innerText = "Eroare: " + e.message;
+                resultContent.innerText = "Eroare: " + e.message;
             } finally {
                 analyzeBtn.disabled = false;
-                analyzeBtn.innerText = "Analizează exact (Ce / Cine / Culoare)";
+                analyzeBtn.innerText = "Scanează TOT ce vede (AI)";
             }
         }
 
