@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Detecție Obiecte Live + Gemini AI</title>
+
+    <!-- TensorFlow.js + COCO-SSD -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #status-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            gap: 8px;
+        }
+        .controls-top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            background: #00e676;
+            color: #000;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        #key-btn {
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        canvas {
+            z-index: 5;
+            pointer-events: none;
+        }
+        #start-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+            padding: 16px 28px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #00e676;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            display: none;
+        }
+
+        /* Zona de jos: Buton Identificare + Rezultat Gemini */
+        #bottom-panel {
+            position: absolute;
+            bottom: 24px;
+            left: 16px;
+            right: 16px;
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #gemini-result {
+            width: 100%;
+            max-width: 500px;
+            background: rgba(18, 18, 18, 0.92);
+            border: 1px solid #00e676;
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-size: 15px;
+            line-height: 1.4;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+        }
+        #gemini-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #00e676;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        #close-result {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        #identify-btn {
+            width: 100%;
+            max-width: 320px;
+            padding: 16px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #2979ff;
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(41, 121, 255, 0.5);
+            transition: transform 0.1s, background 0.2s;
+        }
+        #identify-btn:active {
+            transform: scale(0.97);
+        }
+        #identify-btn:disabled {
+            background: #555;
+            box-shadow: none;
+            cursor: wait;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status-bar">
+        <span id="status-text">Se încarcă AI...</span>
+        <div class="controls-top">
+            <button id="key-btn" onclick="seteazaCheieAPI()">API Key</button>
+            <span id="fps-badge" class="badge">0 FPS</span>
+        </div>
+    </div>
+
+    <button id="start-btn" onclick="pornesteCamera()">Pornește Camera</button>
+
+    <div id="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="bottom-panel">
+        <div id="gemini-result">
+            <div id="gemini-result-header">
+                <span>Identificare Exactă (Gemini)</span>
+                <button id="close-result" onclick="inchideRezultat()">✕</button>
+            </div>
+            <div id="gemini-text"></div>
+        </div>
+
+        <button id="identify-btn" onclick="identificaCuGemini()">Identifică exact (AI)</button>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status-text');
+        const fpsBadge = document.getElementById('fps-badge');
+        const startBtn = document.getElementById('start-btn');
+        const identifyBtn = document.getElementById('identify-btn');
+        const geminiResultBox = document.getElementById('gemini-result');
+        const geminiText = document.getElementById('gemini-text');
+
+        let model = null;
+        let lastFrameTime = performance.now();
+
+        const traduceri = {
+            "person": "Persoană",
+            "cell phone": "Telefon",
+            "bottle": "Sticlă",
+            "cup": "Cană / Pahar",
+            "laptop": "Laptop",
+            "keyboard": "Tastatură",
+            "mouse": "Mouse",
+            "chair": "Scaun",
+            "book": "Carte",
+            "car": "Mașină",
+            "dog": "Câine",
+            "cat": "Pisică",
+            "backpack": "Rucsac",
+            "banana": "Banană",
+            "apple": "Măr",
+            "tv": "Monitor / TV",
+            "remote": "Telecomandă",
+            "scissors": "Foarfecă"
+        };
+
+        // Gestionare Cheie API în localStorage
+        function getApiKey() {
+            return localStorage.getItem('gemini_api_key') || '';
+        }
+
+        function seteazaCheieAPI() {
+            const cheieCurenta = getApiKey();
+            const cheieNoua = prompt("Introdu cheia ta Google Gemini API (AIza...):", cheieCurenta);
+            if (cheieNoua !== null) {
+                localStorage.setItem('gemini_api_key', cheieNoua.trim());
+                alert("Cheia API a fost salvată local pe telefon!");
+            }
+        }
+
+        function inchideRezultat() {
+            geminiResultBox.style.display = 'none';
+        }
+
+        // 1. Încărcarea modelului COCO-SSD
+        async function initAI() {
+            try {
+                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+                statusText.innerText = "AI pregătit";
+                startBtn.style.display = "block";
+                pornesteCamera();
+            } catch (err) {
+                statusText.innerText = "Eroare AI: " + err.message;
+            }
+        }
+
+        // 2. Pornirea camerei
+        async function pornesteCamera() {
+            startBtn.style.display = "none";
+            statusText.innerText = "Se pornește camera...";
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: "environment",
+                        width: { ideal: 1280 }, // Rezoluție mai bună pentru detalii/etichete
+                        height: { ideal: 720 }
+                    }
+                });
+
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    statusText.innerText = "Scanare activă";
+                    detecteazaCadru();
+                };
+            } catch (err) {
+                statusText.innerText = "Permite accesul la cameră";
+                startBtn.style.display = "block";
+            }
+        }
+
+        // 3. Bucla live COCO-SSD (încercuire rapidă)
+        async function detecteazaCadru() {
+            if (!model || video.readyState !== 4) {
+                requestAnimationFrame(detecteazaCadru);
+                return;
+            }
+
+            if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
+                canvas.width = video.clientWidth;
+                canvas.height = video.clientHeight;
+            }
+
+            const predictions = await model.detect(video, 10, 0.55);
+
+            const now = performance.now();
+            const fps = Math.round(1000 / (now - lastFrameTime));
+            lastFrameTime = now;
+            fpsBadge.innerText = `${fps} FPS`;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const videoRatio = video.videoWidth / video.videoHeight;
+            const screenRatio = canvas.width / canvas.height;
+            let scale, offsetX = 0, offsetY = 0;
+
+            if (screenRatio > videoRatio) {
+                scale = canvas.width / video.videoWidth;
+                offsetY = (canvas.height - video.videoHeight * scale) / 2;
+            } else {
+                scale = canvas.height / video.videoHeight;
+                offsetX = (canvas.width - video.videoWidth * scale) / 2;
+            }
+
+            predictions.forEach(pred => {
+                const [rawX, rawY, rawW, rawH] = pred.bbox;
+                const x = rawX * scale + offsetX;
+                const y = rawY * scale + offsetY;
+                const w = rawW * scale;
+                const h = rawH * scale;
+
+                const numeObiect = traduceri[pred.class] || pred.class.toUpperCase();
+                const procent = Math.round(pred.score * 100);
+                const eticheta = `${numeObiect} (${procent}%)`;
+
+                ctx.strokeStyle = "#00e676";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.roundRect(x, y, w, h, 10);
+                ctx.stroke();
+
+                ctx.font = "bold 15px system-ui, sans-serif";
+                const textWidth = ctx.measureText(eticheta).width;
+                const textY = y > 28 ? y - 28 : y + 4;
+
+                ctx.fillStyle = "rgba(0, 230, 118, 0.9)";
+                ctx.fillRect(x, textY, textWidth + 14, 24);
+
+                ctx.fillStyle = "#000000";
+                ctx.fillText(eticheta, x + 7, textY + 17);
+            });
+
+            requestAnimationFrame(detecteazaCadru);
+        }
+
+        // 4. Captură cadru și trimitere către Gemini API
+        async function identificaCuGemini() {
+            let apiKey = getApiKey();
+            if (!apiKey) {
+                seteazaCheieAPI();
+                apiKey = getApiKey();
+                if (!apiKey) return;
+            }
+
+            if (video.readyState !== 4) {
+                alert("Camera nu este pornită încă.");
+                return;
+            }
+
+            // Blocăm butonul pe durata cererii
+            identifyBtn.disabled = true;
+            identifyBtn.innerText = "Se analizează imaginea...";
+            geminiResultBox.style.display = "block";
+            geminiText.innerText = "Se trimite cadrul către Gemini...";
+
+            try {
+                // Capturăm cadrul video într-un canvas invizibil la rezoluție optimă
+                const captureCanvas = document.createElement('canvas');
+                captureCanvas.width = video.videoWidth;
+                captureCanvas.height = video.videoHeight;
+                const captureCtx = captureCanvas.getContext('2d');
+                captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+                // Convertim în JPEG Base64 (calitate 0.8 pentru viteză)
+                const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+                const base64Image = dataUrl.split(',')[1];
+
+                // Apel către Gemini 2.5 Flash API
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{
+                        parts: [
+                            {
+                                text: "Identifică exact obiectul principal sau produsul din centrul imaginii. Răspunde scurt și direct în limba română (maxim 2 propoziții): menționează denumirea exactă, marca, modelul sau gramajul dacă sunt vizibile."
+                            },
+                            {
+                                inline_data: {
+                                    mime_type: "image/jpeg",
+                                    data: base64Image
+                                }
+                            }
+                        ]
+                    }]
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error?.message || "Eroare la comunicarea cu API-ul");
+                }
+
+                const raspunsAI = data.candidates?.[0]?.content?.parts?.[0]?.text || "Nu am putut identifica obiectul.";
+                geminiText.innerText = raspunsAI;
+
+            } catch (err) {
+                geminiText.innerText = "Eroare: " + err.message;
+            } finally {
+                identifyBtn.disabled = false;
+                identifyBtn.innerText = "Identifică exact (AI)";
+            }
+        }
+
+        initAI();
+    </script>
+</body>
+</html>
