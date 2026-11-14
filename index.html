@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Obiecte Live</title>
+    <title>Scanner Obiecte Live v3</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background: #111;
+            background: #000;
             color: #fff;
             font-family: system-ui, -apple-system, sans-serif;
             height: 100vh;
@@ -18,45 +18,43 @@
             display: flex;
             flex-direction: column;
         }
-        /* Bara de sus vizibila mereu */
         #top-bar {
-            background: #1e1e1e;
-            padding: 10px;
+            background: #1a1a1a;
+            padding: 10px 12px;
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             align-items: center;
-            z-index: 30;
+            z-index: 50;
             border-bottom: 1px solid #333;
         }
         #api-input {
             flex: 1;
-            min-width: 150px;
-            padding: 8px 10px;
-            border-radius: 6px;
-            border: 1px solid #555;
+            min-width: 140px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #00e676;
             background: #000;
             color: #00e676;
-            font-size: 13px;
+            font-size: 14px;
         }
-        #save-key-btn {
-            padding: 8px 14px;
+        #save-btn {
+            padding: 10px 16px;
             background: #00e676;
             color: #000;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 14px;
         }
-        #status {
+        #status-row {
             width: 100%;
-            font-size: 12px;
-            color: #ccc;
             display: flex;
             justify-content: space-between;
+            font-size: 12px;
+            color: #bbb;
         }
-        /* Zona camerei */
-        #camera-box {
+        #camera-area {
             position: relative;
             flex: 1;
             width: 100%;
@@ -69,11 +67,30 @@
             object-fit: cover;
         }
         canvas { z-index: 5; pointer-events: none; }
-        #start-cam-btn {
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 44px; height: 44px;
+            transform: translate(-50%, -50%);
+            border: 2px dashed rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            z-index: 6;
+            pointer-events: none;
+        }
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 6px; height: 6px;
+            background: #00e676;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        #manual-cam-btn {
             position: absolute;
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            z-index: 25;
+            z-index: 40;
             padding: 16px 26px;
             font-size: 16px;
             font-weight: bold;
@@ -81,12 +98,12 @@
             color: #000;
             border: none;
             border-radius: 12px;
+            display: none;
         }
-        /* Panou jos */
         #bottom-bar {
             position: absolute;
-            bottom: 20px; left: 12px; right: 12px;
-            z-index: 25;
+            bottom: 24px; left: 14px; right: 14px;
+            z-index: 40;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -97,41 +114,43 @@
             background: rgba(15, 15, 20, 0.95);
             border: 1.5px solid #00e676;
             border-radius: 12px;
-            padding: 12px;
+            padding: 14px;
             font-size: 14px;
-            line-height: 1.4;
+            line-height: 1.45;
             display: none;
             white-space: pre-line;
         }
         #analyze-btn {
             width: 100%;
-            max-width: 340px;
-            padding: 15px;
+            max-width: 350px;
+            padding: 16px;
             font-size: 16px;
             font-weight: bold;
             background: #2979ff;
             color: #fff;
             border: none;
             border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(41, 121, 255, 0.5);
         }
-        #analyze-btn:disabled { background: #555; }
+        #analyze-btn:disabled { background: #555; box-shadow: none; }
     </style>
 </head>
 <body>
 
     <div id="top-bar">
         <input type="text" id="api-input" placeholder="Lipește aici cheia API...">
-        <button id="save-key-btn" onclick="salveazaCheie()">Salvează</button>
-        <div id="status">
-            <span id="status-msg">Se încarcă AI...</span>
+        <button id="save-btn" onclick="salveazaCheie()">Salvează</button>
+        <div id="status-row">
+            <span id="status-msg">Se pornește camera...</span>
             <span id="fps-msg">0 FPS</span>
         </div>
     </div>
 
-    <div id="camera-box">
-        <button id="start-cam-btn" onclick="pornesteCamera()">Pornește Camera</button>
+    <div id="camera-area">
+        <button id="manual-cam-btn" onclick="pornesteCamera()">Pornește Camera</button>
         <video id="video" autoplay muted playsinline></video>
         <canvas id="canvas"></canvas>
+        <div id="crosshair"></div>
 
         <div id="bottom-bar">
             <div id="result-box" onclick="this.style.display='none'"></div>
@@ -146,7 +165,7 @@
         const statusMsg = document.getElementById('status-msg');
         const fpsMsg = document.getElementById('fps-msg');
         const apiInput = document.getElementById('api-input');
-        const startCamBtn = document.getElementById('start-cam-btn');
+        const manualCamBtn = document.getElementById('manual-cam-btn');
         const analyzeBtn = document.getElementById('analyze-btn');
         const resultBox = document.getElementById('result-box');
 
@@ -156,13 +175,12 @@
         let model = null;
         let lastTime = performance.now();
 
-        // Încarcă cheia salvată anterior în căsuță
         apiInput.value = localStorage.getItem('gemini_api_key') || '';
 
         function salveazaCheie() {
             const val = apiInput.value.trim();
             if (!val) {
-                alert("Lipește cheia în căsuța din stânga mai întâi!");
+                alert("Lipește cheia în căsuța din stânga!");
                 return;
             }
             localStorage.setItem('gemini_api_key', val);
@@ -171,11 +189,18 @@
         }
 
         const traduceri = {
-            "person": "Persoană", "cell phone": "Telefon", "bottle": "Sticlă",
-            "cup": "Cană / Pahar", "laptop": "Laptop", "keyboard": "Tastatură",
-            "mouse": "Mouse", "chair": "Scaun", "book": "Carte", "car": "Mașină",
-            "dog": "Câine", "cat": "Pisică", "backpack": "Rucsac", "tv": "Monitor / TV",
-            "remote": "Telecomandă", "scissors": "Foarfecă", "bowl": "Bol", "spoon": "Lingură"
+            "person": "Persoană", "bicycle": "Bicicletă", "car": "Mașină", "motorcycle": "Motocicletă",
+            "bus": "Autobuz", "truck": "Camion", "bird": "Pasăre", "cat": "Pisică", "dog": "Câine",
+            "backpack": "Rucsac", "umbrella": "Umbrelă", "handbag": "Geantă", "suitcase": "Valiză",
+            "sports ball": "Minge", "bottle": "Sticlă", "wine glass": "Pahar", "cup": "Cană / Pahar",
+            "fork": "Furculiță", "knife": "Cuțit", "spoon": "Lingură", "bowl": "Bol",
+            "banana": "Banană", "apple": "Măr", "sandwich": "Sandviș", "orange": "Portocală",
+            "pizza": "Pizza", "donut": "Gogoașă", "cake": "Prăjitură", "chair": "Scaun",
+            "couch": "Canapea", "potted plant": "Plantă", "bed": "Pat", "dining table": "Masă",
+            "tv": "TV / Monitor", "laptop": "Laptop", "mouse": "Mouse", "remote": "Telecomandă",
+            "keyboard": "Tastatură", "cell phone": "Telefon", "microwave": "Cuptor microunde",
+            "refrigerator": "Frigider", "book": "Carte", "clock": "Ceas", "vase": "Vază",
+            "scissors": "Foarfecă", "toothbrush": "Periuță dinți"
         };
 
         function getCuloare(x, y, w, h) {
@@ -198,18 +223,9 @@
             } catch (e) { return ""; }
         }
 
-        async function init() {
-            try {
-                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-                statusMsg.innerText = "AI gata. Pornește camera!";
-                pornesteCamera();
-            } catch (e) {
-                statusMsg.innerText = "Eroare AI: " + e.message;
-            }
-        }
-
+        // 1. Pornim camera IMEDIAT, fără să așteptăm modelul AI
         async function pornesteCamera() {
-            statusMsg.innerText = "Se cere acces cameră...";
+            manualCamBtn.style.display = "none";
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: false,
@@ -217,81 +233,90 @@
                 });
                 video.srcObject = stream;
                 await video.play();
-                startCamBtn.style.display = "none";
-                statusMsg.innerText = "Scanare activă";
+                statusMsg.innerText = model ? "Scanare activă" : "Cameră activă (se încarcă AI...)";
                 buclaDetectie();
             } catch (err) {
-                startCamBtn.style.display = "block";
+                manualCamBtn.style.display = "block";
                 statusMsg.innerText = "Apasă butonul verde (Eroare: " + err.name + ")";
             }
         }
 
+        // 2. Încărcăm modelul rapid în paralel
+        async function incarcaAI() {
+            try {
+                model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+                statusMsg.innerText = "Scanare activă";
+            } catch (e) {
+                statusMsg.innerText = "Cameră activă (AI offline indisponibil)";
+            }
+        }
+
         async function buclaDetectie() {
-            if (!model || video.readyState !== 4) {
-                requestAnimationFrame(buclaDetectie);
-                return;
+            if (video.readyState === 4) {
+                if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
+                    canvas.width = video.clientWidth;
+                    canvas.height = video.clientHeight;
+                }
+
+                if (model) {
+                    if (colorCanvas.width !== video.videoWidth || colorCanvas.height !== video.videoHeight) {
+                        colorCanvas.width = video.videoWidth;
+                        colorCanvas.height = video.videoHeight;
+                    }
+                    colorCtx.drawImage(video, 0, 0, colorCanvas.width, colorCanvas.height);
+
+                    const preds = await model.detect(video, 8, 0.55);
+                    const now = performance.now();
+                    fpsMsg.innerText = Math.round(1000 / (now - lastTime)) + " FPS";
+                    lastTime = now;
+
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    const vRatio = video.videoWidth / video.videoHeight;
+                    const sRatio = canvas.width / canvas.height;
+                    let scale, offX = 0, offY = 0;
+                    if (sRatio > vRatio) {
+                        scale = canvas.width / video.videoWidth;
+                        offY = (canvas.height - video.videoHeight * scale) / 2;
+                    } else {
+                        scale = canvas.height / video.videoHeight;
+                        offX = (canvas.width - video.videoWidth * scale) / 2;
+                    }
+
+                    preds.forEach(p => {
+                        const [rx, ry, rw, rh] = p.bbox;
+                        const x = rx * scale + offX;
+                        const y = ry * scale + offY;
+                        const w = rw * scale;
+                        const h = rh * scale;
+
+                        const nume = traduceri[p.class] || p.class.toUpperCase();
+                        const cul = getCuloare(rx, ry, rw, rh);
+                        const text = `${nume} • ${cul} (${Math.round(p.score*100)}%)`;
+
+                        ctx.strokeStyle = "#00e676";
+                        ctx.lineWidth = 3.5;
+                        ctx.beginPath();
+                        ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+
+                        ctx.font = "bold 14px sans-serif";
+                        const tw = ctx.measureText(text).width;
+                        const ly = y > 28 ? y - 26 : y + 6;
+                        ctx.fillStyle = "rgba(0, 230, 118, 0.92)";
+                        ctx.fillRect(x, ly, tw + 12, 22);
+                        ctx.fillStyle = "#000";
+                        ctx.fillText(text, x + 6, ly + 16);
+                    });
+                }
             }
-            if (canvas.width !== video.clientWidth || canvas.height !== video.clientHeight) {
-                canvas.width = video.clientWidth;
-                canvas.height = video.clientHeight;
-            }
-            if (colorCanvas.width !== video.videoWidth || colorCanvas.height !== video.videoHeight) {
-                colorCanvas.width = video.videoWidth;
-                colorCanvas.height = video.videoHeight;
-            }
-            colorCtx.drawImage(video, 0, 0, colorCanvas.width, colorCanvas.height);
-
-            const preds = await model.detect(video, 8, 0.55);
-            const now = performance.now();
-            fpsMsg.innerText = Math.round(1000 / (now - lastTime)) + " FPS";
-            lastTime = now;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const vRatio = video.videoWidth / video.videoHeight;
-            const sRatio = canvas.width / canvas.height;
-            let scale, offX = 0, offY = 0;
-            if (sRatio > vRatio) {
-                scale = canvas.width / video.videoWidth;
-                offY = (canvas.height - video.videoHeight * scale) / 2;
-            } else {
-                scale = canvas.height / video.videoHeight;
-                offX = (canvas.width - video.videoWidth * scale) / 2;
-            }
-
-            preds.forEach(p => {
-                const [rx, ry, rw, rh] = p.bbox;
-                const x = rx * scale + offX;
-                const y = ry * scale + offY;
-                const w = rw * scale;
-                const h = rh * scale;
-
-                const nume = traduceri[p.class] || p.class.toUpperCase();
-                const cul = getCuloare(rx, ry, rw, rh);
-                const text = `${nume} • ${cul} (${Math.round(p.score*100)}%)`;
-
-                ctx.strokeStyle = "#00e676";
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
-                ctx.stroke();
-
-                ctx.font = "bold 14px sans-serif";
-                const tw = ctx.measureText(text).width;
-                const ly = y > 28 ? y - 26 : y + 6;
-                ctx.fillStyle = "rgba(0, 230, 118, 0.9)";
-                ctx.fillRect(x, ly, tw + 12, 22);
-                ctx.fillStyle = "#000";
-                ctx.fillText(text, x + 6, ly + 16);
-            });
-
             requestAnimationFrame(buclaDetectie);
         }
 
         async function analizeazaExact() {
             const key = apiInput.value.trim() || localStorage.getItem('gemini_api_key');
             if (!key) {
-                alert("Introdu cheia API în căsuța de sus și apasă Salvează!");
+                alert("Lipește cheia API în căsuța neagră de sus și apasă Salvează!");
                 return;
             }
             if (video.readyState !== 4) {
@@ -309,7 +334,7 @@
                 c.width = video.videoWidth;
                 c.height = video.videoHeight;
                 c.getContext('2d').drawImage(video, 0, 0);
-                const b64 = c.toDataURL('image/jpeg', 0.8).split(',')[1];
+                const b64 = c.toDataURL('image/jpeg', 0.85).split(',')[1];
 
                 const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
                     method: 'POST',
@@ -317,7 +342,7 @@
                     body: JSON.stringify({
                         contents: [{
                             parts: [
-                                { text: "Identifică exact ce se află în centrul imaginii. Răspunde scurt în română pe 3 rânduri (atinge caseta ca să o închizi):\n• Ce / Cine este: [obiect exact, marcă, model sau persoană]\n• Culoare: [culorile exacte]\n• Detalii / Text: [text vizibil, stare]" },
+                                { text: "Identifică exact ce se află în centrul imaginii. Răspunde scurt și precis în română pe 3 rânduri:\n• Ce / Cine este: [obiect exact, marcă, model sau persoană]\n• Culoare: [culorile exacte]\n• Detalii / Text: [text vizibil, stare]" },
                                 { inline_data: { mime_type: "image/jpeg", data: b64 } }
                             ]
                         }]
@@ -326,7 +351,7 @@
 
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error?.message || "Eroare API");
-                resultBox.innerText = (data.candidates?.[0]?.content?.parts?.[0]?.text || "Niciun rezultat") + "\n\n(Apasă pe această casetă pentru a o închide)";
+                resultBox.innerText = (data.candidates?.[0]?.content?.parts?.[0]?.text || "Niciun rezultat") + "\n\n(Apasă pe casetă ca să o închizi)";
             } catch (e) {
                 resultBox.innerText = "Eroare: " + e.message;
             } finally {
@@ -335,7 +360,8 @@
             }
         }
 
-        init();
+        pornesteCamera();
+        incarcaAI();
     </script>
 </body>
 </html>
