@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Detecție Obiecte Live + Gemini AI</title>
+    <title>Scanner Obiecte Live + AI</title>
 
     <!-- TensorFlow.js + COCO-SSD -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
@@ -94,8 +94,6 @@
             cursor: pointer;
             display: none;
         }
-
-        /* Zona de jos: Buton Identificare + Rezultat Gemini */
         #bottom-panel {
             position: absolute;
             bottom: 24px;
@@ -149,15 +147,10 @@
             border-radius: 50px;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(41, 121, 255, 0.5);
-            transition: transform 0.1s, background 0.2s;
-        }
-        #identify-btn:active {
-            transform: scale(0.97);
         }
         #identify-btn:disabled {
             background: #555;
             box-shadow: none;
-            cursor: wait;
         }
     </style>
 </head>
@@ -225,7 +218,6 @@
             "scissors": "Foarfecă"
         };
 
-        // Gestionare Cheie API în localStorage
         function getApiKey() {
             return localStorage.getItem('gemini_api_key') || '';
         }
@@ -235,7 +227,7 @@
             const cheieNoua = prompt("Introdu cheia ta Google Gemini API (AIza...):", cheieCurenta);
             if (cheieNoua !== null) {
                 localStorage.setItem('gemini_api_key', cheieNoua.trim());
-                alert("Cheia API a fost salvată local pe telefon!");
+                alert("Cheia API a fost salvată!");
             }
         }
 
@@ -243,7 +235,6 @@
             geminiResultBox.style.display = 'none';
         }
 
-        // 1. Încărcarea modelului COCO-SSD
         async function initAI() {
             try {
                 model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
@@ -255,7 +246,6 @@
             }
         }
 
-        // 2. Pornirea camerei
         async function pornesteCamera() {
             startBtn.style.display = "none";
             statusText.innerText = "Se pornește camera...";
@@ -265,7 +255,7 @@
                     audio: false,
                     video: {
                         facingMode: "environment",
-                        width: { ideal: 1280 }, // Rezoluție mai bună pentru detalii/etichete
+                        width: { ideal: 1280 },
                         height: { ideal: 720 }
                     }
                 });
@@ -282,7 +272,6 @@
             }
         }
 
-        // 3. Bucla live COCO-SSD (încercuire rapidă)
         async function detecteazaCadru() {
             if (!model || video.readyState !== 4) {
                 requestAnimationFrame(detecteazaCadru);
@@ -346,7 +335,6 @@
             requestAnimationFrame(detecteazaCadru);
         }
 
-        // 4. Captură cadru și trimitere către Gemini API
         async function identificaCuGemini() {
             let apiKey = getApiKey();
             if (!apiKey) {
@@ -360,25 +348,21 @@
                 return;
             }
 
-            // Blocăm butonul pe durata cererii
             identifyBtn.disabled = true;
             identifyBtn.innerText = "Se analizează imaginea...";
             geminiResultBox.style.display = "block";
             geminiText.innerText = "Se trimite cadrul către Gemini...";
 
             try {
-                // Capturăm cadrul video într-un canvas invizibil la rezoluție optimă
                 const captureCanvas = document.createElement('canvas');
                 captureCanvas.width = video.videoWidth;
                 captureCanvas.height = video.videoHeight;
                 const captureCtx = captureCanvas.getContext('2d');
                 captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
 
-                // Convertim în JPEG Base64 (calitate 0.8 pentru viteză)
                 const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
                 const base64Image = dataUrl.split(',')[1];
 
-                // Apel către Gemini 2.5 Flash API
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
                 const payload = {
